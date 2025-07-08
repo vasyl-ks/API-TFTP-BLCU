@@ -30,148 +30,6 @@ def get_ip_addresses():
     # Remove duplicates and return the list of IP addresses
     return list(set(ip_addresses))
 
-class TFTPServer(QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("TFTP Server")
-        self.setGeometry(100, 100, 500, 400)
-
-        self.current_directory = os.getcwd()
-        self.server = None
-
-        # UI Elements
-        self.ip_combo = QtWidgets.QComboBox(self)
-        self.ip_combo.addItems(get_ip_addresses())  # Populate with available IPs
-
-        self.start_button = QtWidgets.QPushButton("Start Server", self)
-        self.start_button.clicked.connect(self.start_server)
-
-        self.stop_button = QtWidgets.QPushButton("Stop Server", self)
-        self.stop_button.clicked.connect(self.stop_server)
-        self.stop_button.setEnabled(False)
-
-        self.status_label = QtWidgets.QLabel("Server Status: Stopped", self)
-        self.status_label.setStyleSheet("font-weight: bold; color: red;")
-
-        self.port_input = QtWidgets.QSpinBox(self)
-        self.port_input.setRange(1, 65535)
-        self.port_input.setValue(69)
-        self.port_label = QtWidgets.QLabel("Port:", self)
-
-        self.dir_label = QtWidgets.QLabel(f"Current Directory: {self.current_directory}", self)
-
-        self.browse_button = QtWidgets.QPushButton("Change Directory", self)
-        self.browse_button.clicked.connect(self.change_directory)
-
-        self.view_dir_button = QtWidgets.QPushButton("View Directory Contents", self)
-        self.view_dir_button.clicked.connect(self.view_directory)
-
-        self.log_output = QtWidgets.QTextEdit(self)
-        self.log_output.setReadOnly(True)
-
-        # Layout
-        layout = QtWidgets.QVBoxLayout()
-
-        layout.addWidget(QtWidgets.QLabel("Select Server IP:"))
-        layout.addWidget(self.ip_combo)
-
-        port_layout = QtWidgets.QHBoxLayout()
-        port_layout.addWidget(self.port_label)
-        port_layout.addWidget(self.port_input)
-        layout.addLayout(port_layout)
-
-        button_layout = QtWidgets.QHBoxLayout()
-        button_layout.addWidget(self.start_button)
-        button_layout.addWidget(self.stop_button)
-        layout.addLayout(button_layout)
-
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.dir_label)
-        layout.addWidget(self.browse_button)
-        layout.addWidget(self.view_dir_button)
-        layout.addWidget(QtWidgets.QLabel("Server Log:"))
-        layout.addWidget(self.log_output)
-
-        self.setLayout(layout)
-        self.setStyleSheet("background-color: #f0f0f0; font-family: Arial;")
-
-    def start_server(self):
-        if not self.server:
-            port = self.port_input.value()
-            ip_address = self.ip_combo.currentText()  # Get selected IP from dropdown
-            self.server = TftpServer(self.current_directory)  # Use current directory
-            threading.Thread(target=self.server.listen, args=(ip_address, port), daemon=True).start()
-            self.status_label.setText("Server Status: Running")
-            self.status_label.setStyleSheet("font-weight: bold; color: green;")
-            self.start_button.setEnabled(False)
-            self.stop_button.setEnabled(True)
-
-            # Redirect logs to the text output
-            logger.addHandler(TextHandler(self.log_output))
-
-    def stop_server(self):
-        if self.server:
-            self.server.stop()
-            self.server = None
-            self.status_label.setText("Server Status: Stopped")
-            self.status_label.setStyleSheet("font-weight: bold; color: red;")
-            self.start_button.setEnabled(True)
-            self.stop_button.setEnabled(False)
-
-    def change_directory(self):
-        new_dir = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Directory", self.current_directory)
-        if new_dir:
-            self.current_directory = new_dir
-            self.dir_label.setText(f"Current Directory: {self.current_directory}")
-            if self.server:
-                self.server.root = self.current_directory  # Update server root
-
-    def view_directory(self):
-        self.dir_window = DirectoryView(self.current_directory)
-        self.dir_window.show()
-
-class TextHandler(logging.Handler):
-    """Custom logging handler to write logs to a QTextEdit."""
-    def __init__(self, text_edit):
-        super().__init__()
-        self.text_edit = text_edit
-
-    def emit(self, record):
-        msg = self.format(record)
-        self.text_edit.append(msg)
-
-class DirectoryView(QtWidgets.QDialog):
-    def __init__(self, directory):
-        super().__init__()
-        self.setWindowTitle("Directory Contents")
-        self.setGeometry(200, 200, 400, 300)
-
-        self.directory = directory
-
-        self.file_list = QtWidgets.QListWidget(self)
-        self.load_directory_contents()
-
-        self.copy_button = QtWidgets.QPushButton("Copy Selected Name", self)
-        self.copy_button.clicked.connect(self.copy_selected_name)
-
-        layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(self.file_list)
-        layout.addWidget(self.copy_button)
-
-        self.setLayout(layout)
-
-    def load_directory_contents(self):
-        self.file_list.clear()
-        for item in os.listdir(self.directory):
-            self.file_list.addItem(item)
-
-    def copy_selected_name(self):
-        selected_items = self.file_list.selectedItems()
-        if selected_items:
-            file_name = selected_items[0].text()
-            QtWidgets.QApplication.clipboard().setText(file_name)
-            QtWidgets.QMessageBox.information(self, "Copy Name", f"Copied: {file_name}")
-
 class TFTPClient(QtWidgets.QWidget):
     log_signal = QtCore.pyqtSignal(str)  # Signal to update log
 
@@ -180,8 +38,12 @@ class TFTPClient(QtWidgets.QWidget):
         self.setWindowTitle("TFTP Client")
         self.setGeometry(500, 100, 500, 400)
 
+        self.hardcoded_ip = "192.168.0.27"
+
         self.ip_input = QtWidgets.QLineEdit(self)
         self.ip_input.setPlaceholderText("Enter Server IP Address")
+        self.ip_input.setText(self.hardcoded_ip)  # Set hardcoded IP
+        self.ip_input.setReadOnly(True)
 
         # Separate inputs for upload and download
         self.upload_file_input = QtWidgets.QLineEdit(self)
@@ -360,18 +222,11 @@ class TFTPClient(QtWidgets.QWidget):
         self.log_output.moveCursor(QtGui.QTextCursor.End)  # Scroll to the bottom
 
 
-class MainApp(QtWidgets.QTabWidget):
-    def __init__(self):
-        super().__init__()
-        self.addTab(TFTPServer(), "TFTP Server")
-        self.addTab(TFTPClient(), "TFTP Client")
-        self.setStyleSheet("QTabWidget::pane { border: 1px solid #cccccc; }")
-
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    main_app = MainApp()
-    main_app.setWindowTitle("TFTP Client/Server by petrunetworking")
-    main_app.setGeometry(100, 100, 800, 500)
-    main_app.setStyleSheet("background-color: #eaeaea; font-family: Arial;")
-    main_app.show()
+    client = TFTPClient()
+    client.setWindowTitle("TFTP Client by petrunetworking")
+    client.setGeometry(100, 100, 500, 400)
+    client.setStyleSheet("background-color: #eaeaea; font-family: Arial;")
+    client.show()
     sys.exit(app.exec_())

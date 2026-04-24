@@ -1,12 +1,15 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from tftp.TftpClient import TftpClient
 
 app = FastAPI(title="TFTP API", version="0.1.0")
+
+LOG_FILE = Path("tftp_server_activity.log")
+
 
 class TransferRequest(BaseModel):
     host: str
@@ -71,4 +74,19 @@ def download_file(request: TransferRequest) -> dict:
         "port": request.port,
         "remote_filename": request.remote_filename,
         "local_path": str(local_path),
+    }
+
+
+@app.get("/logs")
+def get_logs(tail: int = Query(default=200, ge=1, le=5000)) -> dict:
+    if not LOG_FILE.exists():
+        return {"path": str(LOG_FILE), "lines": [], "line_count": 0}
+
+    lines = LOG_FILE.read_text(encoding="utf-8", errors="replace").splitlines()
+    selected_lines = lines[-tail:]
+
+    return {
+        "path": str(LOG_FILE.resolve()),
+        "lines": selected_lines,
+        "line_count": len(selected_lines),
     }
